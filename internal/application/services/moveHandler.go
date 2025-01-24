@@ -21,20 +21,51 @@ func NewMoveHandler(world *domain.World, logger Logger) *MoveHandler {
 func (h *MoveHandler) Handle(c Command) error {
 	ch, ok := h.world.Characters[c.CharacterID]
 	if !ok {
-		return nil
+		return fmt.Errorf("character not found")
 	}
 	if ch.IsDead() {
-		return nil
+		return fmt.Errorf("character is dead")
 	}
-	dx, _ := c.Data["dx"].(float64)
-	dy, _ := c.Data["dy"].(float64)
-	ch.MoveStep(dx, dy)
+
+	cx, cy := ch.Position()
+
+	dxVal, ok := c.Data["dx"].(float64)
+	if !ok {
+		return fmt.Errorf("invalid dx value")
+	}
+	dyVal, ok := c.Data["dy"].(float64)
+	if !ok {
+		return fmt.Errorf("invalid dy value")
+	}
+
+	nx := cx + dxVal
+	ny := cy + dyVal
+
+	nx = h.clamp(nx, 0, h.world.Width)
+	ny = h.clamp(ny, 0, h.world.Height)
+
+	deltaX := nx - cx
+	deltaY := ny - cy
+
+	ch.MoveStep(deltaX, deltaY)
 
 	acx, acy := ch.Position()
-	math.Hypot(dx-acx, dy-acy)
-	h.logMove(ch, math.Hypot(dx-acx, dy-acy))
+	distance := math.Hypot(acx-cx, acy-cy)
+	if distance > 0 {
+		h.logMove(ch, distance)
+	}
 
 	return nil
+}
+
+func (h *MoveHandler) clamp(v, minV, maxV float64) float64 {
+	if v < minV {
+		return minV
+	}
+	if v > maxV {
+		return maxV
+	}
+	return v
 }
 
 func (h *MoveHandler) logMove(character domain.Character, distance float64) {

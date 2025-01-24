@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"fmt"
 	"meatgrinder/internal/application/dtos"
 	"meatgrinder/internal/domain"
@@ -52,7 +51,7 @@ func (gs *GameService) UpdateWorld() {
 	gs.world.Update()
 }
 
-func (gs *GameService) BroadcastState(ctx context.Context) {
+func (gs *GameService) BroadcastState() {
 	for _, c := range gs.world.Characters {
 		if c.IsDead() && c.State() == domain.StateDying {
 			id := c.ID()

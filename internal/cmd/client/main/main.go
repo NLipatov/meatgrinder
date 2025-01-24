@@ -11,6 +11,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"meatgrinder/internal/cmd/settings"
 	"path/filepath"
 	"sync"
 	"time"
@@ -58,8 +59,8 @@ func NewGame(addr, id string) (*Game, error) {
 		ctx:    ctx,
 		cancel: c,
 		id:     id,
-		w:      800,
-		h:      600,
+		w:      settings.MapHeight,
+		h:      settings.MapWidth,
 		speed:  2,
 	}
 	cl := network.NewClient(addr)

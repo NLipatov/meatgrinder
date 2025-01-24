@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"meatgrinder/internal/application/services"
+	"meatgrinder/internal/cmd/settings"
 	"meatgrinder/internal/domain"
 	"meatgrinder/internal/infrastructure/network"
 	"meatgrinder/internal/infrastructure/persistence"
@@ -21,14 +22,14 @@ func main() {
 		<-ch
 		cancel()
 	}()
-	w := domain.NewWorld(100, 100)
+	w := domain.NewWorld(settings.MapHeight-200, settings.MapWidth-230)
 	svc := services.NewWorldSnapshotService()
 	l := persistence.NewFileLogger("game_events.log")
 	gs := services.NewGameService(w, l, svc)
 	srv := network.NewServer(":8080", gs)
 
 	go func() {
-		t := time.NewTicker(time.Second / 60)
+		t := time.NewTicker(time.Second / 120)
 		defer t.Stop()
 		for {
 			select {
@@ -36,7 +37,7 @@ func main() {
 				return
 			case <-t.C:
 				gs.UpdateWorld()
-				gs.BroadcastState(ctx)
+				gs.BroadcastState()
 			}
 		}
 	}()
