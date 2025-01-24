@@ -16,7 +16,7 @@ func NewMage(id string, x, y float64) *Mage {
 			health:     80,
 			x:          x,
 			y:          y,
-			speed:      1.5,
+			speed:      7,
 			damageType: Magical,
 			state:      StateIdle,
 		},

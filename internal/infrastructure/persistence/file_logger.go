@@ -11,7 +11,7 @@ type FileLogger struct {
 	filePath string
 }
 
-func NewFileLogger(path string) services.ILogger {
+func NewFileLogger(path string) services.Logger {
 	return &FileLogger{filePath: path}
 }
 

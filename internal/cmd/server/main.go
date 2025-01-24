@@ -6,6 +6,7 @@ import (
 	"meatgrinder/internal/application/services"
 	"meatgrinder/internal/domain"
 	"meatgrinder/internal/infrastructure/network"
+	"meatgrinder/internal/infrastructure/persistence"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,7 +23,8 @@ func main() {
 	}()
 	w := domain.NewWorld(100, 100)
 	svc := services.NewWorldSnapshotService()
-	gs := services.NewGameService(w, svc)
+	l := persistence.NewFileLogger("game_events.log")
+	gs := services.NewGameService(w, l, svc)
 	srv := network.NewServer(":8080", gs)
 
 	go func() {

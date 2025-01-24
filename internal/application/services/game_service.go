@@ -3,18 +3,28 @@ package services
 import (
 	"context"
 	"fmt"
-	"math"
 	"meatgrinder/internal/application/dtos"
 	"meatgrinder/internal/domain"
 )
 
 type GameService struct {
-	world *domain.World
-	snap  *WorldSnapshotService
+	world         *domain.World
+	snap          *WorldSnapshotService
+	logger        Logger
+	attackHandler Handler
+	moveHandler   Handler
+	SpawnHandler  Handler
 }
 
-func NewGameService(w *domain.World, s *WorldSnapshotService) *GameService {
-	return &GameService{world: w, snap: s}
+func NewGameService(w *domain.World, logger Logger, s *WorldSnapshotService) *GameService {
+	return &GameService{
+		world:         w,
+		logger:        logger,
+		snap:          s,
+		attackHandler: NewAttackHandler(w, logger),
+		moveHandler:   NewMoveHandler(w, logger),
+		SpawnHandler:  NewSpawnHandler(w, logger),
+	}
 }
 
 func (gs *GameService) ProcessCommandDTO(d dtos.CommandDTO) error {
@@ -28,62 +38,14 @@ func (gs *GameService) ProcessCommandDTO(d dtos.CommandDTO) error {
 func (gs *GameService) ProcessCommand(c Command) error {
 	switch c.Type {
 	case "SPAWN":
-		return gs.handleSpawn(c.CharacterID)
+		return gs.SpawnHandler.Handle(c)
 	case "MOVE":
-		return gs.handleMove(c.CharacterID, c.Data)
+		return gs.moveHandler.Handle(c)
 	case "ATTACK":
-		return gs.handleAttack(c.CharacterID, c.Data)
+		return gs.attackHandler.Handle(c)
 	default:
 		return fmt.Errorf("unknown cmd %s", c.Type)
 	}
-}
-
-func (gs *GameService) handleSpawn(id string) error {
-	if _, ok := gs.world.Characters[id]; ok {
-		return nil
-	}
-	gs.world.SpawnRandomCharacter(id)
-	return nil
-}
-
-func (gs *GameService) handleMove(id string, data map[string]interface{}) error {
-	ch, ok := gs.world.Characters[id]
-	if !ok {
-		return nil
-	}
-	if ch.IsDead() {
-		return nil
-	}
-	dx, _ := data["dx"].(float64)
-	dy, _ := data["dy"].(float64)
-	ch.MoveStep(dx, dy)
-	return nil
-}
-
-func (gs *GameService) handleAttack(id string, data map[string]interface{}) error {
-	attacker, ok := gs.world.Characters[id]
-	if !ok {
-		return nil
-	}
-	if attacker.IsDead() {
-		return nil
-	}
-	tid, _ := data["target_id"].(string)
-	target, exist := gs.world.Characters[tid]
-	if !exist || target.IsDead() {
-		return nil
-	}
-
-	acx, acy := attacker.Position()
-	tcx, tcy := target.Position()
-	dist := math.Hypot(tcx-acx, tcy-acy)
-	if dist > attacker.AttackRadius() {
-		return nil
-	}
-	fmt.Println()
-
-	attacker.Attack([]domain.Character{target})
-	return nil
 }
 
 func (gs *GameService) UpdateWorld() {

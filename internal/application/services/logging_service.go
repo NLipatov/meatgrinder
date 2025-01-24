@@ -1,10 +1,10 @@
 package services
 
 type LoggingService struct {
-	logger ILogger
+	logger Logger
 }
 
-func NewLoggingService(logger ILogger) LoggingService {
+func NewLoggingService(logger Logger) LoggingService {
 	return LoggingService{
 		logger: logger,
 	}

@@ -1,5 +1,5 @@
 package services
 
-type ILogger interface {
+type Logger interface {
 	LogEvent(event string)
 }

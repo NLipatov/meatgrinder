@@ -16,7 +16,7 @@ func NewWarrior(id string, x, y float64) *Warrior {
 			health:     100,
 			x:          x,
 			y:          y,
-			speed:      1,
+			speed:      5,
 			damageType: Physical,
 			state:      StateIdle,
 		},
