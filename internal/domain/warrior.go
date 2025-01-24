@@ -12,14 +12,15 @@ type Warrior struct {
 func NewWarrior(id string, x, y float64) *Warrior {
 	return &Warrior{
 		BaseCharacter: BaseCharacter{
-			id:     id,
-			health: 100,
-			x:      x,
-			y:      y,
-			speed:  1.0,
+			id:         id,
+			health:     100,
+			x:          x,
+			y:          y,
+			speed:      1.0,
+			damageType: Physical,
 		},
 		attackPower:  20,
-		attackRadius: 2.0,
+		attackRadius: 5.0,
 		physicalRes:  0.5,
 	}
 }
@@ -48,6 +49,14 @@ func (w *Warrior) TakeDamage(amount float64, dmgType DamageType) {
 		amount *= 1.0 - w.physicalRes
 	}
 	w.BaseCharacter.TakeDamage(amount, dmgType)
+}
+
+func (w *Warrior) AttackRadius() float64 {
+	return w.attackRadius
+}
+
+func (w *Warrior) AttackPower() float64 {
+	return w.attackPower
 }
 
 func distance(x1, y1, x2, y2 float64) float64 {

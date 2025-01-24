@@ -4,18 +4,20 @@ import "fmt"
 
 type Mage struct {
 	BaseCharacter
-	attackPower float64
-	magicalRes  float64
+	attackPower  float64
+	magicalRes   float64
+	attackRadius float64
 }
 
 func NewMage(id string, x, y float64) *Mage {
 	return &Mage{
 		BaseCharacter: BaseCharacter{
-			id:     id,
-			health: 80,
-			x:      x,
-			y:      y,
-			speed:  1.2,
+			id:         id,
+			health:     80,
+			x:          x,
+			y:          y,
+			speed:      1.5,
+			damageType: Magical,
 		},
 		attackPower: 30,
 		magicalRes:  0.3,
@@ -37,4 +39,12 @@ func (m *Mage) TakeDamage(amount float64, dmgType DamageType) {
 		amount *= 1.0 - m.magicalRes
 	}
 	m.BaseCharacter.TakeDamage(amount, dmgType)
+}
+
+func (m *Mage) AttackRadius() float64 {
+	return m.attackRadius
+}
+
+func (m *Mage) AttackPower() float64 {
+	return m.attackPower
 }

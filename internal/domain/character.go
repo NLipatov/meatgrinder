@@ -7,10 +7,12 @@ type Character interface {
 	Position() (float64, float64)
 	Health() float64
 	IsDead() bool
-
+	DamageType() DamageType
 	Attack(targets []Character)
 	MoveTo(x, y float64)
 	TakeDamage(amount float64, damageType DamageType)
+	AttackPower() float64
+	AttackRadius() float64
 
 	Update(dt float64)
 }
@@ -18,26 +20,42 @@ type Character interface {
 type DamageType int
 
 const (
-	Physical DamageType = iota
+	Unset DamageType = iota
+	Physical
 	Magical
 )
 
 type BaseCharacter struct {
-	id     string
-	health float64
-	x, y   float64
-	speed  float64
-	isDead bool
+	id         string
+	health     float64
+	x, y       float64
+	baseSpeed  float64
+	speed      float64
+	isDead     bool
+	damageType DamageType
+
+	slowTimer  float64
+	slowAmount float64
 }
 
-func NewBaseCharacter(health, x, y, speed float64, isDead bool) BaseCharacter {
-	return BaseCharacter{
-		id:     "",
-		health: health,
-		x:      x,
-		y:      y,
-		speed:  speed,
-		isDead: isDead,
+func (bc *BaseCharacter) InitBase(id string, health float64, x, y float64, baseSpeed float64, damageType DamageType) {
+	bc.id = id
+	bc.health = health
+	bc.x = x
+	bc.y = y
+	bc.baseSpeed = baseSpeed
+	bc.speed = baseSpeed
+	bc.damageType = damageType
+}
+
+func (bc *BaseCharacter) Update(dt float64) {
+	if bc.slowTimer > 0 {
+		bc.slowTimer -= dt
+		if bc.slowTimer <= 0 {
+			bc.speed = bc.baseSpeed
+			bc.slowTimer = 0
+			bc.slowAmount = 0
+		}
 	}
 }
 func (bc *BaseCharacter) ID() string                   { return bc.id }
@@ -63,4 +81,17 @@ func (bc *BaseCharacter) TakeDamage(amount float64, dmgType DamageType) {
 }
 
 func (bc *BaseCharacter) Attack(targets []Character) {}
-func (bc *BaseCharacter) Update(dt float64)          {}
+
+func (bc *BaseCharacter) ApplySlow(amount float64, duration float64) {
+	if bc.isDead {
+		return
+	}
+
+	bc.slowAmount = amount
+	bc.slowTimer = duration
+	bc.speed = bc.baseSpeed * (1.0 - bc.slowAmount)
+}
+
+func (bc *BaseCharacter) DamageType() DamageType {
+	return bc.damageType
+}
