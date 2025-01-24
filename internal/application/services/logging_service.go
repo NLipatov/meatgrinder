@@ -1,9 +1,5 @@
 package services
 
-type ILogger interface {
-	LogEvent(event string)
-}
-
 type LoggingService struct {
 	logger ILogger
 }
