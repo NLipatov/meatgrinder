@@ -1,6 +1,9 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 type Warrior struct {
 	BaseCharacter
@@ -62,5 +65,5 @@ func (w *Warrior) AttackPower() float64 {
 func distance(x1, y1, x2, y2 float64) float64 {
 	dx := x2 - x1
 	dy := y2 - y1
-	return dx*dx + dy*dy
+	return math.Hypot(dx, dy)
 }
