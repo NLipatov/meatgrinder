@@ -8,28 +8,27 @@ type World struct {
 	Height     float64
 }
 
-func NewWorld(width, height float64) *World {
+func NewWorld(w, h float64) *World {
 	return &World{
 		Characters: make(map[string]Character),
-		Width:      width,
-		Height:     height,
+		Width:      w,
+		Height:     h,
 	}
 }
 
-func (w *World) SpawnRandomCharacter(id string) {
-	x := rand.Float64() * w.Width
-	y := rand.Float64() * w.Height
-
+func (wd *World) SpawnRandomCharacter(id string) {
+	x := rand.Float64() * wd.Width
+	y := rand.Float64() * wd.Height
 	if rand.Intn(2) == 0 {
-		w.Characters[id] = NewWarrior(id, x, y)
+		wd.Characters[id] = NewWarrior(id, x, y)
 	} else {
-		w.Characters[id] = NewMage(id, x, y)
+		wd.Characters[id] = NewMage(id, x, y)
 	}
 }
 
-func (w *World) Update() {
-	dt := 1.0 / 20.0
-	for _, ch := range w.Characters {
-		ch.Update(dt)
+func (wd *World) Update() {
+	dt := 1.0 / 60.0
+	for _, c := range wd.Characters {
+		c.Update(dt)
 	}
 }

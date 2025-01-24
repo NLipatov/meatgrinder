@@ -4,42 +4,53 @@ import "fmt"
 
 type Warrior struct {
 	BaseCharacter
-
-	attackPower  float64
-	attackRadius float64
-	physicalRes  float64
+	power  float64
+	radius float64
+	res    float64
 }
 
 func NewWarrior(id string, x, y float64) *Warrior {
-	w := &Warrior{
-		attackPower:  20,
-		attackRadius: 5.0,
-		physicalRes:  0.5,
+	return &Warrior{
+		BaseCharacter: BaseCharacter{
+			id:         id,
+			health:     100,
+			x:          x,
+			y:          y,
+			speed:      1,
+			damageType: Physical,
+			state:      StateIdle,
+		},
+		power:  20,
+		radius: 5,
+		res:    0.5,
 	}
-	w.InitBase(id, 100, x, y, 1.0, Physical)
-	return w
 }
 
 func (w *Warrior) Attack(targets []Character) {
+	if w.isDead || w.state == StateDying {
+		return
+	}
+	w.state = StateAttacking
+	w.attackTimer = 0.3
 	for _, t := range targets {
 		if t.IsDead() {
 			continue
 		}
-		damage := w.attackPower
-		if otherW, ok := t.(*Warrior); ok {
-			damage *= 1.0 - otherW.physicalRes
+		d := w.power
+		if ww, ok := t.(*Warrior); ok {
+			d *= (1 - ww.res)
 		}
-		t.TakeDamage(damage, Physical)
-		fmt.Printf("Warrior %s dealt %f damage to %s\n", w.ID(), damage, t.ID())
+		t.TakeDamage(d, Physical)
+		fmt.Printf("%s warrior attacked %s\n", w.id, t.ID())
 	}
 }
 
-func (w *Warrior) TakeDamage(amount float64, dmgType DamageType) {
-	if dmgType == Physical {
-		amount *= 1.0 - w.physicalRes
+func (w *Warrior) TakeDamage(a float64, dt DamageType) {
+	if dt == Physical {
+		a *= (1 - w.res)
 	}
-	w.BaseCharacter.TakeDamage(amount, dmgType)
+	w.BaseCharacter.TakeDamage(a, dt)
 }
 
-func (w *Warrior) AttackPower() float64  { return w.attackPower }
-func (w *Warrior) AttackRadius() float64 { return w.attackRadius }
+func (w *Warrior) AttackPower() float64  { return w.power }
+func (w *Warrior) AttackRadius() float64 { return w.radius }

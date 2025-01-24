@@ -5,17 +5,22 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"image"
 	"image/color"
 	_ "image/png"
 	"log"
-	"meatgrinder/internal/application/dtos"
-	"meatgrinder/internal/infrastructure/network"
+	"math"
+	"math/rand"
+	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+
+	"meatgrinder/internal/application/dtos"
+	"meatgrinder/internal/infrastructure/network"
 )
 
 type WorldSnapshot struct {
@@ -25,165 +30,173 @@ type WorldSnapshot struct {
 type CharacterSnapshot struct {
 	ID     string  `json:"id"`
 	Class  string  `json:"class"`
+	State  string  `json:"state"`
 	Health float64 `json:"health"`
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
+	Flash  bool    `json:"flash"`
 }
 
 type Game struct {
-	netClient *network.Client
-	ctx       context.Context
-	cancel    context.CancelFunc
-
-	characterID   string
-	width, height int
-
-	mu       sync.Mutex
-	snapshot WorldSnapshot
-
-	mageImage    *ebiten.Image
-	warriorImage *ebiten.Image
-
-	spriteWidth, spriteHeight float64
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	client                  *network.Client
+	id                      string
+	w, h                    int
+	mu                      sync.Mutex
+	snap                    WorldSnapshot
+	bg                      *ebiten.Image
+	mIdle, mRun, mAtk, mDie *ebiten.Image
+	wIdle, wRun, wAtk, wDie *ebiten.Image
+	spW, spH                float64
+	speed                   float64
 }
 
-func NewGame(serverAddr, charID string) (*Game, error) {
+func NewGame(addr, id string) (*Game, error) {
+	ctx, c := context.WithCancel(context.Background())
 	g := &Game{
-		characterID: charID,
-		width:       800,
-		height:      600,
+		ctx:    ctx,
+		cancel: c,
+		id:     id,
+		w:      800,
+		h:      600,
+		speed:  2,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	g.ctx = ctx
-	g.cancel = cancel
-
-	g.netClient = network.NewClient(serverAddr)
-	if err := g.netClient.Connect(ctx); err != nil {
-		return nil, fmt.Errorf("connect failed: %w", err)
+	cl := network.NewClient(addr)
+	if err := cl.Connect(ctx); err != nil {
+		return nil, err
 	}
-	spawn := dtos.CommandDTO{Type: "SPAWN", CharacterID: charID}
-	_ = g.netClient.SendCommand(spawn)
+	g.client = cl
+	go g.listen()
 
-	go g.listenUpdates()
+	spawnCmd := dtos.CommandDTO{
+		Type:        "SPAWN",
+		CharacterID: id,
+		Data:        map[string]interface{}{},
+	}
+	g.client.SendCommand(spawnCmd)
 
 	return g, nil
 }
 
-func (g *Game) listenUpdates() {
-	for data := range g.netClient.UpdatesChannel() {
-		raw, err := json.Marshal(data)
+func (g *Game) listen() {
+	for data := range g.client.UpdatesChannel() {
+		b, err := json.Marshal(data)
 		if err != nil {
-			log.Println("Marshal error:", err)
 			continue
 		}
-		var snap WorldSnapshot
-		if err := json.Unmarshal(raw, &snap); err != nil {
-			log.Println("Unmarshal error:", err)
+		var ws WorldSnapshot
+		if err := json.Unmarshal(b, &ws); err != nil {
 			continue
 		}
-
 		g.mu.Lock()
-		g.snapshot = snap
+		g.snap = ws
 		g.mu.Unlock()
 	}
 }
 
-func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return g.width, g.height
+func (g *Game) Layout(int, int) (int, int) {
+	return g.w, g.h
 }
 
 func (g *Game) Update() error {
-	speed := 8.0
-	moveX, moveY := 0.0, 0.0
-
+	dx, dy := 0.0, 0.0
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
-		moveY -= speed
+		dy -= g.speed
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyS) {
-		moveY += speed
+		dy += g.speed
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyA) {
-		moveX -= speed
+		dx -= g.speed
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyD) {
-		moveX += speed
+		dx += g.speed
 	}
-
-	if moveX != 0 || moveY != 0 {
-		x, y := g.getLocalPos()
-		cmd := dtos.CommandDTO{
+	if math.Abs(dx)+math.Abs(dy) > 0 {
+		g.client.SendCommand(dtos.CommandDTO{
 			Type:        "MOVE",
-			CharacterID: g.characterID,
+			CharacterID: g.id,
 			Data: map[string]interface{}{
-				"x": x + moveX,
-				"y": y + moveY,
+				"dx": dx,
+				"dy": dy,
 			},
-		}
-		_ = g.netClient.SendCommand(cmd)
+		})
 	}
-
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		mx, my := ebiten.CursorPosition()
-		clickedID := g.findCharacterUnderMouse(float64(mx), float64(my))
-		if clickedID != "" {
-			cmd := dtos.CommandDTO{
+		tid := g.findCharUnder(float64(mx), float64(my))
+		if tid != "" && tid != g.id {
+			g.client.SendCommand(dtos.CommandDTO{
 				Type:        "ATTACK",
-				CharacterID: g.characterID,
-				Data:        map[string]interface{}{"target_id": clickedID},
-			}
-			_ = g.netClient.SendCommand(cmd)
-			log.Printf("ATTACK on %s", clickedID)
+				CharacterID: g.id,
+				Data:        map[string]interface{}{"target_id": tid},
+			})
 		}
 	}
-
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(color.RGBA{R: 45, G: 45, B: 45, A: 255})
-
+	screen.Fill(color.RGBA{40, 40, 80, 255})
+	if g.bg != nil {
+		op := &ebiten.DrawImageOptions{}
+		screen.DrawImage(g.bg, op)
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	for _, ch := range g.snapshot.Characters {
-		var img *ebiten.Image
-		switch ch.Class {
-		case "warrior":
-			img = g.warriorImage
-		case "mage":
-			img = g.mageImage
-		default:
-			img = g.warriorImage
-		}
-		if img == nil {
-			continue
+	for _, c := range g.snap.Characters {
+		img := g.pickSprite(c.Class, c.State)
+		if c.State == "dying" {
+			img = g.dyingSprite(c.Class)
 		}
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(0.1, 0.1)
-		op.GeoM.Translate(ch.X, ch.Y)
+		if c.Flash {
+			op.ColorM.Scale(1, 0, 0, 1)
+		}
+		op.GeoM.Scale(0.5, 0.5)
+		op.GeoM.Translate(c.X, c.Y)
 		screen.DrawImage(img, op)
 	}
 }
 
-func (g *Game) getLocalPos() (float64, float64) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	for _, c := range g.snapshot.Characters {
-		if c.ID == g.characterID {
-			return c.X, c.Y
+func (g *Game) pickSprite(class, st string) *ebiten.Image {
+	if class == "mage" {
+		if st == "running" {
+			return g.mRun
 		}
+		if st == "attacking" {
+			return g.mAtk
+		}
+		return g.mIdle
 	}
-	return 0, 0
+	if class == "warrior" {
+		if st == "running" {
+			return g.wRun
+		}
+		if st == "attacking" {
+			return g.wAtk
+		}
+		return g.wIdle
+	}
+	return g.wIdle
 }
 
-func (g *Game) findCharacterUnderMouse(mx, my float64) string {
+func (g *Game) dyingSprite(class string) *ebiten.Image {
+	if class == "mage" {
+		return g.mDie
+	}
+	return g.wDie
+}
+
+func (g *Game) findCharUnder(mx, my float64) string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-
-	for _, c := range g.snapshot.Characters {
-		x1, y1 := c.X, c.Y
-		x2, y2 := x1+g.spriteWidth, y1+g.spriteHeight
-		if mx >= x1 && mx <= x2 && my >= y1 && my <= y2 {
+	for _, c := range g.snap.Characters {
+		sw := 0.5 * g.spW
+		sh := 0.5 * g.spH
+		if mx >= c.X && mx <= c.X+sw && my >= c.Y && my <= c.Y+sh {
 			return c.ID
 		}
 	}
@@ -192,54 +205,70 @@ func (g *Game) findCharacterUnderMouse(mx, my float64) string {
 
 func (g *Game) Close() error {
 	g.cancel()
-	g.netClient.Close()
+	g.client.Close()
 	return nil
 }
 
-func main() {
-	serverAddr := flag.String("addr", "localhost:8080", "Server address")
-	charID := flag.String("id", "player123", "Character ID")
-	flag.Parse()
+func (g *Game) LoadAssets(dir string) {
+	bg, _ := loadImg(filepath.Join(dir, "background.png"))
+	g.bg = bg
 
-	g, err := NewGame(*serverAddr, *charID)
-	if err != nil {
-		log.Fatal(err)
-	}
+	m1, _ := loadImg(filepath.Join(dir, "mage.png"))
+	g.mIdle = m1
+	m2, _ := loadImg(filepath.Join(dir, "mage-running.png"))
+	g.mRun = m2
+	m3, _ := loadImg(filepath.Join(dir, "mage-attacking.png"))
+	g.mAtk = m3
+	m4, _ := loadImg(filepath.Join(dir, "mage-dying.png"))
+	g.mDie = m4
 
-	mageImg, err := loadImage("assets/mage.png")
-	if err != nil {
-		log.Println("failed to load mage.png:", err)
-	}
-	g.mageImage = mageImg
+	w1, _ := loadImg(filepath.Join(dir, "warrior.png"))
+	g.wIdle = w1
+	w2, _ := loadImg(filepath.Join(dir, "warrior-running.png"))
+	g.wRun = w2
+	w3, _ := loadImg(filepath.Join(dir, "warrior-attacking.png"))
+	g.wAtk = w3
+	w4, _ := loadImg(filepath.Join(dir, "warrior-dying.png"))
+	g.wDie = w4
 
-	wImg, err := loadImage("assets/warrior.png")
-	if err != nil {
-		log.Println("failed to load warrior.png:", err)
-	}
-	g.warriorImage = wImg
-
-	if mageImg != nil {
-		w, h := mageImg.Size()
-		g.spriteWidth, g.spriteHeight = float64(w), float64(h)
-	}
-
-	ebiten.SetWindowSize(g.width, g.height)
-	ebiten.SetWindowTitle("Meatgrinder Ebitengine Client (Sprites)")
-	if err := ebiten.RunGame(g); err != nil {
-		log.Fatal(err)
+	if m1 != nil {
+		ww, hh := m1.Size()
+		g.spW, g.spH = float64(ww), float64(hh)
 	}
 }
 
-func loadImage(path string) (*ebiten.Image, error) {
+func loadImg(path string) (*ebiten.Image, error) {
 	f, err := ebitenutil.OpenFile(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-
-	img, _, err := image.Decode(f)
-	if err != nil {
-		return nil, err
+	img, _, err2 := image.Decode(f)
+	if err2 != nil {
+		return nil, err2
 	}
 	return ebiten.NewImageFromImage(img), nil
+}
+
+func main() {
+	addr := flag.String("addr", "localhost:8080", "server addr")
+	id := flag.String("id", "", "character ID (empty => random)")
+	assetsDir := flag.String("assets", "assets", "path to assets folder")
+	flag.Parse()
+
+	if *id == "" {
+		rand.Seed(time.Now().UnixNano())
+		*id = fmt.Sprintf("player-%04d", rand.Intn(9999))
+	}
+
+	g, err := NewGame(*addr, *id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	g.LoadAssets(*assetsDir)
+	ebiten.SetWindowSize(g.w, g.h)
+	ebiten.SetWindowTitle("Meatgrinder (WASD + Attack)")
+	if err := ebiten.RunGame(g); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -17,28 +17,30 @@ type WorldSnapshot struct {
 type CharacterSnapshot struct {
 	ID     string  `json:"id"`
 	Class  string  `json:"class"`
+	State  string  `json:"state"`
 	Health float64 `json:"health"`
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
+	Flash  bool    `json:"flash"`
 }
 
-func (svc *WorldSnapshotService) BuildSnapshot(world *domain.World) WorldSnapshot {
+func (svc *WorldSnapshotService) BuildSnapshot(w *domain.World) WorldSnapshot {
 	var snap WorldSnapshot
-	for _, ch := range world.Characters {
-		x, y := ch.Position()
-		cClass := ""
+	for _, ch := range w.Characters {
+		xx, yy := ch.Position()
+		cc := "warrior"
 		switch ch.(type) {
 		case *domain.Mage:
-			cClass = "mage"
-		case *domain.Warrior:
-			cClass = "warrior"
+			cc = "mage"
 		}
 		snap.Characters = append(snap.Characters, CharacterSnapshot{
 			ID:     ch.ID(),
-			Class:  cClass,
+			Class:  cc,
+			State:  string(ch.State()),
 			Health: ch.Health(),
-			X:      x,
-			Y:      y,
+			X:      xx,
+			Y:      yy,
+			Flash:  ch.FlashRed(),
 		})
 	}
 	return snap

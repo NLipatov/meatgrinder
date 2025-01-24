@@ -10,51 +10,44 @@ const (
 	Magical
 )
 
+type CharacterState string
+
+const (
+	StateIdle      CharacterState = "idle"
+	StateRunning   CharacterState = "running"
+	StateAttacking CharacterState = "attacking"
+	StateDying     CharacterState = "dying"
+)
+
 type Character interface {
 	ID() string
 	Position() (float64, float64)
 	Health() float64
 	IsDead() bool
 	DamageType() DamageType
-
-	Attack(targets []Character)
-
-	MoveTo(x, y float64)
-	TakeDamage(amount float64, dmgType DamageType)
-
+	State() CharacterState
+	SetState(CharacterState)
+	Attack([]Character)
+	MoveStep(float64, float64)
+	TakeDamage(float64, DamageType)
 	AttackPower() float64
 	AttackRadius() float64
-
-	Update(dt float64)
+	Update(float64)
+	FlashRed() bool
 }
 
 type BaseCharacter struct {
-	id         string
-	health     float64
-	x, y       float64
-	baseSpeed  float64
-	speed      float64
-	isDead     bool
-	damageType DamageType
-
-	slowTimer  float64
-	slowAmount float64
-}
-
-func (bc *BaseCharacter) InitBase(
-	id string,
-	health float64,
-	x, y float64,
-	baseSpeed float64,
-	damageType DamageType,
-) {
-	bc.id = id
-	bc.health = health
-	bc.x = x
-	bc.y = y
-	bc.baseSpeed = baseSpeed
-	bc.speed = baseSpeed
-	bc.damageType = damageType
+	id          string
+	health      float64
+	x, y        float64
+	isDead      bool
+	damageType  DamageType
+	speed       float64
+	state       CharacterState
+	attackTimer float64
+	hitTimer    float64
+	flashRedOn  bool
+	noMoveTimer float64
 }
 
 func (bc *BaseCharacter) ID() string                   { return bc.id }
@@ -62,46 +55,66 @@ func (bc *BaseCharacter) Position() (float64, float64) { return bc.x, bc.y }
 func (bc *BaseCharacter) Health() float64              { return bc.health }
 func (bc *BaseCharacter) IsDead() bool                 { return bc.isDead }
 func (bc *BaseCharacter) DamageType() DamageType       { return bc.damageType }
+func (bc *BaseCharacter) State() CharacterState        { return bc.state }
+func (bc *BaseCharacter) SetState(s CharacterState)    { bc.state = s }
+func (bc *BaseCharacter) FlashRed() bool               { return bc.flashRedOn }
 
-func (bc *BaseCharacter) MoveTo(x, y float64) {
-	dx := x - bc.x
-	dy := y - bc.y
-	dist := math.Hypot(dx, dy)
-	if dist > 0 {
-		bc.x += (dx / dist) * bc.speed
-		bc.y += (dy / dist) * bc.speed
+func (bc *BaseCharacter) MoveStep(dx, dy float64) {
+	if bc.isDead || bc.state == StateDying {
+		return
 	}
+	dist := math.Hypot(dx, dy)
+	if dist < 0.0001 {
+		return
+	}
+	bc.x += (dx / dist) * bc.speed
+	bc.y += (dy / dist) * bc.speed
+	bc.state = StateRunning
+	bc.noMoveTimer = 0
 }
 
-func (bc *BaseCharacter) TakeDamage(amount float64, dmgType DamageType) {
-	bc.health -= amount
+func (bc *BaseCharacter) TakeDamage(amt float64, dt DamageType) {
+	if bc.isDead || bc.state == StateDying {
+		return
+	}
+	bc.health -= amt
+	bc.flashRedOn = true
+	bc.hitTimer = 0.2
 	if bc.health <= 0 {
 		bc.isDead = true
+		bc.state = StateDying
 	}
 }
 
-func (bc *BaseCharacter) Attack(targets []Character) {
-}
+func (bc *BaseCharacter) Attack([]Character)    {}
+func (bc *BaseCharacter) AttackPower() float64  { return 0 }
+func (bc *BaseCharacter) AttackRadius() float64 { return 0 }
 
 func (bc *BaseCharacter) Update(dt float64) {
-	if bc.slowTimer > 0 {
-		bc.slowTimer -= dt
-		if bc.slowTimer <= 0 {
-			bc.slowAmount = 0
-			bc.slowTimer = 0
-			bc.speed = bc.baseSpeed
+	if bc.isDead && bc.state != StateDying {
+		bc.state = StateDying
+	}
+
+	if bc.state == StateAttacking {
+		bc.attackTimer -= dt
+		if bc.attackTimer <= 0 {
+			bc.state = StateIdle
+			bc.attackTimer = 0
+		}
+	}
+
+	if bc.hitTimer > 0 {
+		bc.hitTimer -= dt
+		if bc.hitTimer <= 0 {
+			bc.flashRedOn = false
+			bc.hitTimer = 0
+		}
+	}
+
+	if bc.state == StateRunning {
+		bc.noMoveTimer += dt
+		if bc.noMoveTimer >= 0.5 {
+			bc.state = StateIdle
 		}
 	}
 }
-
-func (bc *BaseCharacter) ApplySlow(amount float64, duration float64) {
-	if bc.isDead {
-		return
-	}
-	bc.slowAmount = amount
-	bc.slowTimer = duration
-	bc.speed = bc.baseSpeed * (1.0 - amount)
-}
-
-func (bc *BaseCharacter) AttackPower() float64  { return 0 }
-func (bc *BaseCharacter) AttackRadius() float64 { return 0 }

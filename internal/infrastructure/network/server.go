@@ -12,18 +12,17 @@ import (
 )
 
 type Server struct {
-	addr        string
-	gameService *services.GameService
-
-	mu          sync.Mutex
-	connections map[net.Conn]struct{}
+	addr  string
+	game  *services.GameService
+	mu    sync.Mutex
+	conns map[net.Conn]struct{}
 }
 
-func NewServer(addr string, gs *services.GameService) *Server {
+func NewServer(a string, g *services.GameService) *Server {
 	return &Server{
-		addr:        addr,
-		gameService: gs,
-		connections: make(map[net.Conn]struct{}),
+		addr:  a,
+		game:  g,
+		conns: make(map[net.Conn]struct{}),
 	}
 }
 
@@ -33,91 +32,57 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return err
 	}
 	defer ln.Close()
-	log.Printf("Server listening on %s", s.addr)
-
-	go s.broadcastLoop(ctx)
-
+	log.Printf("Server on %s", s.addr)
+	go s.broadcast(ctx)
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Server context canceled, stopping accept loop.")
 			return nil
 		default:
 		}
-
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Println("Accept error:", err)
 			continue
 		}
-
 		s.mu.Lock()
-		s.connections[conn] = struct{}{}
+		s.conns[conn] = struct{}{}
 		s.mu.Unlock()
-
-		log.Printf("New client connected: %s", conn.RemoteAddr())
-
-		go s.handleConnection(conn)
+		go s.handle(conn)
 	}
 }
 
-func (s *Server) handleConnection(conn net.Conn) {
+func (s *Server) handle(c net.Conn) {
 	defer func() {
 		s.mu.Lock()
-		delete(s.connections, conn)
+		delete(s.conns, c)
 		s.mu.Unlock()
-		conn.Close()
-		log.Printf("Client disconnected: %s", conn.RemoteAddr())
+		c.Close()
 	}()
-
-	decoder := json.NewDecoder(conn)
+	d := json.NewDecoder(c)
 	for {
 		var cmd dtos.CommandDTO
-		if err := decoder.Decode(&cmd); err != nil {
-			log.Printf("Decode error from %s: %v", conn.RemoteAddr(), err)
+		if err := d.Decode(&cmd); err != nil {
 			return
 		}
-		if err := s.gameService.ProcessCommandDTO(cmd); err != nil {
-			log.Printf("ProcessCommandDTO error: %v", err)
-			s.sendError(conn, err.Error())
-		}
+		s.game.ProcessCommandDTO(cmd)
 	}
 }
 
-func (s *Server) broadcastLoop(ctx context.Context) {
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-
+func (s *Server) broadcast(ctx context.Context) {
+	t := time.NewTicker(200 * time.Millisecond)
+	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			snapshot := s.gameService.BuildWorldSnapshot()
-			s.broadcastState(snapshot)
+		case <-t.C:
+			ss := s.game.BuildWorldSnapshot()
+			b, _ := json.Marshal(ss)
+			s.mu.Lock()
+			for c := range s.conns {
+				c.Write(b)
+			}
+			s.mu.Unlock()
 		}
 	}
-}
-
-func (s *Server) broadcastState(snapshot interface{}) {
-	data, err := json.Marshal(snapshot)
-	if err != nil {
-		log.Println("Marshal world snapshot error:", err)
-		return
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for c := range s.connections {
-		if _, werr := c.Write(data); werr != nil {
-			log.Printf("Error writing to client %s: %v", c.RemoteAddr(), werr)
-		}
-	}
-}
-
-func (s *Server) sendError(conn net.Conn, msg string) {
-	resp := map[string]string{"error": msg}
-	data, _ := json.Marshal(resp)
-	conn.Write(data)
 }
