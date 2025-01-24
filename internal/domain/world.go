@@ -28,4 +28,8 @@ func (w *World) SpawnRandomCharacter(id string) {
 }
 
 func (w *World) Update() {
+	dt := 1.0 / 20.0
+	for _, ch := range w.Characters {
+		ch.Update(dt)
+	}
 }

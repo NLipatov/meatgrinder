@@ -2,21 +2,6 @@ package domain
 
 import "math"
 
-type Character interface {
-	ID() string
-	Position() (float64, float64)
-	Health() float64
-	IsDead() bool
-	DamageType() DamageType
-	Attack(targets []Character)
-	MoveTo(x, y float64)
-	TakeDamage(amount float64, damageType DamageType)
-	AttackPower() float64
-	AttackRadius() float64
-
-	Update(dt float64)
-}
-
 type DamageType int
 
 const (
@@ -24,6 +9,24 @@ const (
 	Physical
 	Magical
 )
+
+type Character interface {
+	ID() string
+	Position() (float64, float64)
+	Health() float64
+	IsDead() bool
+	DamageType() DamageType
+
+	Attack(targets []Character)
+
+	MoveTo(x, y float64)
+	TakeDamage(amount float64, dmgType DamageType)
+
+	AttackPower() float64
+	AttackRadius() float64
+
+	Update(dt float64)
+}
 
 type BaseCharacter struct {
 	id         string
@@ -38,7 +41,13 @@ type BaseCharacter struct {
 	slowAmount float64
 }
 
-func (bc *BaseCharacter) InitBase(id string, health float64, x, y float64, baseSpeed float64, damageType DamageType) {
+func (bc *BaseCharacter) InitBase(
+	id string,
+	health float64,
+	x, y float64,
+	baseSpeed float64,
+	damageType DamageType,
+) {
 	bc.id = id
 	bc.health = health
 	bc.x = x
@@ -48,20 +57,11 @@ func (bc *BaseCharacter) InitBase(id string, health float64, x, y float64, baseS
 	bc.damageType = damageType
 }
 
-func (bc *BaseCharacter) Update(dt float64) {
-	if bc.slowTimer > 0 {
-		bc.slowTimer -= dt
-		if bc.slowTimer <= 0 {
-			bc.speed = bc.baseSpeed
-			bc.slowTimer = 0
-			bc.slowAmount = 0
-		}
-	}
-}
 func (bc *BaseCharacter) ID() string                   { return bc.id }
 func (bc *BaseCharacter) Position() (float64, float64) { return bc.x, bc.y }
 func (bc *BaseCharacter) Health() float64              { return bc.health }
 func (bc *BaseCharacter) IsDead() bool                 { return bc.isDead }
+func (bc *BaseCharacter) DamageType() DamageType       { return bc.damageType }
 
 func (bc *BaseCharacter) MoveTo(x, y float64) {
 	dx := x - bc.x
@@ -80,18 +80,28 @@ func (bc *BaseCharacter) TakeDamage(amount float64, dmgType DamageType) {
 	}
 }
 
-func (bc *BaseCharacter) Attack(targets []Character) {}
+func (bc *BaseCharacter) Attack(targets []Character) {
+}
+
+func (bc *BaseCharacter) Update(dt float64) {
+	if bc.slowTimer > 0 {
+		bc.slowTimer -= dt
+		if bc.slowTimer <= 0 {
+			bc.slowAmount = 0
+			bc.slowTimer = 0
+			bc.speed = bc.baseSpeed
+		}
+	}
+}
 
 func (bc *BaseCharacter) ApplySlow(amount float64, duration float64) {
 	if bc.isDead {
 		return
 	}
-
 	bc.slowAmount = amount
 	bc.slowTimer = duration
-	bc.speed = bc.baseSpeed * (1.0 - bc.slowAmount)
+	bc.speed = bc.baseSpeed * (1.0 - amount)
 }
 
-func (bc *BaseCharacter) DamageType() DamageType {
-	return bc.damageType
-}
+func (bc *BaseCharacter) AttackPower() float64  { return 0 }
+func (bc *BaseCharacter) AttackRadius() float64 { return 0 }

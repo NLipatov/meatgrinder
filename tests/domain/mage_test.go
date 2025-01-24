@@ -6,11 +6,27 @@ import (
 )
 
 func TestMage_Attack(t *testing.T) {
-	w := domain.NewWarrior("w1", 0, 0)
-	m := domain.NewMage("m1", 0, 0)
-	m.Attack([]domain.Character{w})
+	mage := domain.NewMage("mage1", 10, 10)
+	warr := domain.NewWarrior("war1", 10, 10)
 
-	if w.Health() >= 100 {
-		t.Errorf("Warrior health must be < 100 after mage's attack")
+	warrHealthBefore := warr.Health()
+
+	mage.Attack([]domain.Character{warr})
+
+	if warr.Health() >= warrHealthBefore {
+		t.Errorf("Warrior's health should decrease after Mage attack. Before=%.1f, After=%.1f",
+			warrHealthBefore, warr.Health())
+	}
+}
+
+func TestMage_TakeDamage_MagicalRes(t *testing.T) {
+	mage := domain.NewMage("mage1", 0, 0)
+	hpBefore := mage.Health()
+
+	mage.TakeDamage(50, domain.Magical)
+	expectedHP := hpBefore - (50 * (1.0 - 0.3))
+
+	if mage.Health() != expectedHP {
+		t.Errorf("Expected Mage HP=%.1f after magical damage, got %.1f", expectedHP, mage.Health())
 	}
 }
