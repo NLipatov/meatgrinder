@@ -14,12 +14,13 @@ func TestGameService_BroadcastState_Attack(t *testing.T) {
 	w := domain.NewWorld(100, 100)
 	gs := services.NewGameService(w, &mockLogger{})
 	ctx := context.Background()
-	defer ctx.Done()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	go gs.BroadcastState(ctx)
 
 	mage := domain.NewMage("Mage", 20, 30)
-	warrior := domain.NewMage("Warrior", 20, 30)
+	warrior := domain.NewWarrior("Warrior", 20, 30)
 	w.Characters[mage.ID()] = mage
 	w.Characters[warrior.ID()] = warrior
 
@@ -48,11 +49,12 @@ func TestGameService_ProcessMoveCommand(t *testing.T) {
 	l := &mockLogger{}
 	gs := services.NewGameService(w, l)
 
-	w.SpawnRandomCharacter("char1")
+	mage := domain.NewMage("Mage", 20, 30)
+	w.Characters[mage.ID()] = mage
 
 	dto := dtos.CommandDTO{
 		Type:        "MOVE",
-		CharacterID: "char1",
+		CharacterID: "Mage",
 		Data: map[string]interface{}{
 			"x": 5.0,
 			"y": 10.0,
@@ -64,7 +66,7 @@ func TestGameService_ProcessMoveCommand(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ch := w.Characters["char1"]
+	ch := w.Characters["Mage"]
 	x, y := ch.Position()
 	if x == 0 && y == 0 {
 		t.Error("character did not move (still at 0,0)")
