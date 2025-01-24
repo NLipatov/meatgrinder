@@ -21,7 +21,7 @@ func NewWarrior(id string, x, y float64) *Warrior {
 			state:      StateIdle,
 		},
 		power:  20,
-		radius: 5,
+		radius: 250,
 		res:    0.5,
 	}
 }

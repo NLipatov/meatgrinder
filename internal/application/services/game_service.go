@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"math"
 	"meatgrinder/internal/application/dtos"
 	"meatgrinder/internal/domain"
 )
@@ -60,19 +61,28 @@ func (gs *GameService) handleMove(id string, data map[string]interface{}) error 
 }
 
 func (gs *GameService) handleAttack(id string, data map[string]interface{}) error {
-	ch, ok := gs.world.Characters[id]
+	attacker, ok := gs.world.Characters[id]
 	if !ok {
 		return nil
 	}
-	if ch.IsDead() {
+	if attacker.IsDead() {
 		return nil
 	}
 	tid, _ := data["target_id"].(string)
-	tg, exist := gs.world.Characters[tid]
-	if !exist || tg.IsDead() {
+	target, exist := gs.world.Characters[tid]
+	if !exist || target.IsDead() {
 		return nil
 	}
-	ch.Attack([]domain.Character{tg})
+
+	acx, acy := attacker.Position()
+	tcx, tcy := target.Position()
+	dist := math.Hypot(tcx-acx, tcy-acy)
+	if dist > attacker.AttackRadius() {
+		return nil
+	}
+	fmt.Println()
+
+	attacker.Attack([]domain.Character{target})
 	return nil
 }
 

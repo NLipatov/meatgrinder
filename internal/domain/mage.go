@@ -21,7 +21,7 @@ func NewMage(id string, x, y float64) *Mage {
 			state:      StateIdle,
 		},
 		power:  30,
-		radius: 8,
+		radius: 450,
 		res:    0.3,
 	}
 }
