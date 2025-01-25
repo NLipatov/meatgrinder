@@ -154,7 +154,7 @@ func (g *Game) Update() error {
 			}
 			g.mu.Unlock()
 
-			if target != nil && attacker != nil {
+			if target != nil && attacker != nil && strings.ToLower(attacker.Class) == "mage" {
 				fb := Fireball{
 					x:       attacker.X,
 					y:       attacker.Y,
