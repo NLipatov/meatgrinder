@@ -1,6 +1,7 @@
 package services
 
 import (
+	"meatgrinder/internal/application/command"
 	"meatgrinder/internal/domain"
 )
 
@@ -16,7 +17,7 @@ func NewSpawnHandler(world *domain.World, logger Logger) *SpawnHandler {
 	}
 }
 
-func (h *SpawnHandler) Handle(c Command) error {
+func (h *SpawnHandler) Handle(c command.Command) error {
 	if _, ok := h.world.Characters[c.CharacterID]; ok {
 		return nil
 	}

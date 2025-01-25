@@ -3,7 +3,7 @@ package network
 import (
 	"context"
 	"encoding/json"
-	"meatgrinder/internal/application/dtos"
+	"meatgrinder/internal/application/command"
 	"net"
 	"sync"
 )
@@ -53,7 +53,7 @@ func (c *Client) UpdatesChannel() <-chan interface{} {
 	return c.ch
 }
 
-func (c *Client) SendCommand(cmd dtos.CommandDTO) error {
+func (c *Client) SendCommand(cmd command.DTO) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.conn == nil {

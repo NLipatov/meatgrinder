@@ -1,19 +1,27 @@
-package services
+package command
 
 import (
 	"fmt"
-	"meatgrinder/internal/application/commands"
-	"meatgrinder/internal/application/dtos"
+)
+
+type Type int
+
+const (
+	UNSET Type = iota
+	SPAWN
+	MOVE
+	ATTACK
+	DISCONNECT
 )
 
 type Command struct {
-	Type        commands.CommandType
+	Type        Type
 	CharacterID string
 	Data        map[string]interface{}
 }
 
-func MapDTOToCommand(dto dtos.CommandDTO) (Command, error) {
-	if dto.Type == commands.UNSET {
+func MapDTOToCommand(dto DTO) (Command, error) {
+	if dto.Type == UNSET {
 		return Command{}, fmt.Errorf("invalid command type is unset")
 	}
 

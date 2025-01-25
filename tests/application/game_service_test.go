@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"math"
 	"math/rand"
-	"meatgrinder/internal/application/commands"
+	"meatgrinder/internal/application/command"
 	"meatgrinder/internal/application/services"
 	"meatgrinder/internal/domain"
 	"testing"
@@ -16,7 +16,7 @@ type MockHandler struct {
 	mock.Mock
 }
 
-func (m *MockHandler) Handle(c services.Command) error {
+func (m *MockHandler) Handle(c command.Command) error {
 	args := m.Called(c)
 	return args.Error(0)
 }
@@ -38,7 +38,7 @@ func TestGameService_ProcessCommand(t *testing.T) {
 
 	t.Run("SPAWN command", func(t *testing.T) {
 		charId := fmt.Sprintf("char-%v", rand.Intn(math.MaxInt32))
-		cmd := services.Command{Type: commands.SPAWN, CharacterID: charId}
+		cmd := command.Command{Type: command.SPAWN, CharacterID: charId}
 
 		err := gameService.ProcessCommand(cmd)
 
@@ -52,8 +52,8 @@ func TestGameService_ProcessCommand(t *testing.T) {
 		character := world.Characters[charId]
 
 		initialX, initialY := character.Position()
-		cmd := services.Command{
-			Type:        commands.MOVE,
+		cmd := command.Command{
+			Type:        command.MOVE,
 			CharacterID: charId,
 			Data: map[string]interface{}{
 				"dx": initialX + 1.0,
@@ -79,8 +79,8 @@ func TestGameService_ProcessCommand(t *testing.T) {
 		world.Characters[attackerId] = mage
 		world.Characters[targetId] = warrior
 
-		_ = gameService.ProcessCommand(services.Command{
-			Type:        commands.MOVE,
+		_ = gameService.ProcessCommand(command.Command{
+			Type:        command.MOVE,
 			CharacterID: attackerId,
 			Data: map[string]interface{}{
 				"dx": 100.0,
@@ -90,8 +90,8 @@ func TestGameService_ProcessCommand(t *testing.T) {
 		targetInitH := world.Characters[targetId].Health()
 		attackerInitH := world.Characters[attackerId].Health()
 
-		_ = gameService.ProcessCommand(services.Command{
-			Type:        commands.ATTACK,
+		_ = gameService.ProcessCommand(command.Command{
+			Type:        command.ATTACK,
 			CharacterID: attackerId,
 			Data:        map[string]interface{}{"target_id": targetId},
 		})
@@ -106,11 +106,11 @@ func TestGameService_ProcessCommand(t *testing.T) {
 
 	t.Run("DISCONNECT command", func(t *testing.T) {
 		charId := fmt.Sprintf("char-%v", rand.Intn(math.MaxInt32))
-		_ = gameService.ProcessCommand(services.Command{Type: commands.SPAWN, CharacterID: charId})
+		_ = gameService.ProcessCommand(command.Command{Type: command.SPAWN, CharacterID: charId})
 
 		_, charWasOnMap := world.Characters[charId]
 
-		_ = gameService.ProcessCommand(services.Command{Type: commands.DISCONNECT, CharacterID: charId})
+		_ = gameService.ProcessCommand(command.Command{Type: command.DISCONNECT, CharacterID: charId})
 		_, charWasOnMapAfterDisconnect := world.Characters[charId]
 
 		assert.True(t, charWasOnMap)
@@ -118,7 +118,7 @@ func TestGameService_ProcessCommand(t *testing.T) {
 	})
 
 	t.Run("Unknown command", func(t *testing.T) {
-		cmd := services.Command{Type: commands.UNSET}
+		cmd := command.Command{Type: command.UNSET}
 
 		err := gameService.ProcessCommand(cmd)
 

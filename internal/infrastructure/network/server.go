@@ -4,8 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"meatgrinder/internal/application/commands"
-	"meatgrinder/internal/application/dtos"
+	"meatgrinder/internal/application/command"
 	"meatgrinder/internal/application/services"
 	"net"
 	"sync"
@@ -61,8 +60,8 @@ func (s *Server) handle(c net.Conn) {
 		delete(s.conns, c)
 		s.mu.Unlock()
 
-		_ = s.game.ProcessCommandDTO(dtos.CommandDTO{
-			Type:        commands.DISCONNECT,
+		_ = s.game.ProcessCommandDTO(command.DTO{
+			Type:        command.DISCONNECT,
 			CharacterID: charId,
 			Data:        nil,
 		})
@@ -71,7 +70,7 @@ func (s *Server) handle(c net.Conn) {
 	}()
 
 	for {
-		var cmd dtos.CommandDTO
+		var cmd command.DTO
 		if err := d.Decode(&cmd); err != nil {
 			return
 		}

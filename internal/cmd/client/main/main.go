@@ -10,7 +10,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	"meatgrinder/internal/application/commands"
+	"meatgrinder/internal/application/command"
 	"meatgrinder/internal/cmd/settings"
 	"path/filepath"
 	"strings"
@@ -20,7 +20,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"meatgrinder/internal/application/dtos"
 	"meatgrinder/internal/infrastructure/network"
 )
 
@@ -81,8 +80,8 @@ func NewGame(addr, id string) (*Game, error) {
 	g.client = cl
 	go g.listen()
 
-	spawnCmd := dtos.CommandDTO{
-		Type:        commands.SPAWN,
+	spawnCmd := command.DTO{
+		Type:        command.SPAWN,
 		CharacterID: id,
 		Data:        map[string]interface{}{},
 	}
@@ -132,8 +131,8 @@ func (g *Game) Update() error {
 		mx, my := ebiten.CursorPosition()
 		tid = g.findCharUnder(float64(mx), float64(my))
 		if tid != "" && tid != g.id {
-			_ = g.client.SendCommand(dtos.CommandDTO{
-				Type:        commands.ATTACK,
+			_ = g.client.SendCommand(command.DTO{
+				Type:        command.ATTACK,
 				CharacterID: g.id,
 				Data:        map[string]interface{}{"target_id": tid},
 			})
@@ -175,8 +174,8 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) sendMoveCommand(dx, dy float64) {
-	_ = g.client.SendCommand(dtos.CommandDTO{
-		Type:        commands.MOVE,
+	_ = g.client.SendCommand(command.DTO{
+		Type:        command.MOVE,
 		CharacterID: g.id,
 		Data: map[string]interface{}{
 			"dx": dx,

@@ -1,5 +1,7 @@
 package services
 
+import "meatgrinder/internal/application/command"
+
 type Handler interface {
-	Handle(c Command) error
+	Handle(c command.Command) error
 }

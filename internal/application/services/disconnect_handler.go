@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"meatgrinder/internal/application/command"
 	"meatgrinder/internal/domain"
 )
 
@@ -17,7 +18,7 @@ func NewDisconnectHandler(w *domain.World, l Logger) *DisconnectHandler {
 	}
 }
 
-func (h *DisconnectHandler) Handle(c Command) error {
+func (h *DisconnectHandler) Handle(c command.Command) error {
 	delete(h.world.Characters, c.CharacterID)
 	h.logger.LogEvent(fmt.Sprintf("%s disconnected", c.CharacterID))
 	return nil

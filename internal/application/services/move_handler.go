@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"math"
+	"meatgrinder/internal/application/command"
 	"meatgrinder/internal/domain"
 )
 
@@ -18,7 +19,7 @@ func NewMoveHandler(world *domain.World, logger Logger) *MoveHandler {
 	}
 }
 
-func (h *MoveHandler) Handle(c Command) error {
+func (h *MoveHandler) Handle(c command.Command) error {
 	ch, ok := h.world.Characters[c.CharacterID]
 	if !ok {
 		return fmt.Errorf("character not found")

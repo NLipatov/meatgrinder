@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"math"
+	"meatgrinder/internal/application/command"
 	"meatgrinder/internal/domain"
 )
 
@@ -18,7 +19,7 @@ func NewAttackHandler(world *domain.World, logger Logger) *AttackHandler {
 	}
 }
 
-func (h *AttackHandler) Handle(c Command) error {
+func (h *AttackHandler) Handle(c command.Command) error {
 	attacker, ok := h.world.Characters[c.CharacterID]
 	if !ok {
 		return nil
