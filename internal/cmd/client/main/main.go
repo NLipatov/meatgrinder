@@ -11,6 +11,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"meatgrinder/internal/application/commands"
 	"meatgrinder/internal/cmd/settings"
 	"path/filepath"
 	"strings"
@@ -82,7 +83,7 @@ func NewGame(addr, id string) (*Game, error) {
 	go g.listen()
 
 	spawnCmd := dtos.CommandDTO{
-		Type:        "SPAWN",
+		Type:        commands.SPAWN,
 		CharacterID: id,
 		Data:        map[string]interface{}{},
 	}
@@ -133,7 +134,7 @@ func (g *Game) Update() error {
 		tid = g.findCharUnder(float64(mx), float64(my))
 		if tid != "" && tid != g.id {
 			g.client.SendCommand(dtos.CommandDTO{
-				Type:        "ATTACK",
+				Type:        commands.ATTACK,
 				CharacterID: g.id,
 				Data:        map[string]interface{}{"target_id": tid},
 			})
@@ -176,7 +177,7 @@ func (g *Game) Update() error {
 
 func (g *Game) sendMoveCommand(dx, dy float64) {
 	g.client.SendCommand(dtos.CommandDTO{
-		Type:        "MOVE",
+		Type:        commands.MOVE,
 		CharacterID: g.id,
 		Data: map[string]interface{}{
 			"dx": dx,

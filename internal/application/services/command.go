@@ -2,18 +2,19 @@ package services
 
 import (
 	"fmt"
+	"meatgrinder/internal/application/commands"
 	"meatgrinder/internal/application/dtos"
 )
 
 type Command struct {
-	Type        string
+	Type        commands.CommandType
 	CharacterID string
 	Data        map[string]interface{}
 }
 
 func MapDTOToCommand(dto dtos.CommandDTO) (Command, error) {
-	if dto.Type == "" {
-		return Command{}, fmt.Errorf("command type is empty")
+	if dto.Type == commands.UNSET {
+		return Command{}, fmt.Errorf("invalid command type is unset")
 	}
 
 	return Command{

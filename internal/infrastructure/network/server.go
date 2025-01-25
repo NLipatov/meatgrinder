@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"meatgrinder/internal/application/commands"
 	"meatgrinder/internal/application/dtos"
 	"meatgrinder/internal/application/services"
 	"net"
@@ -61,7 +62,7 @@ func (s *Server) handle(c net.Conn) {
 		s.mu.Unlock()
 
 		_ = s.game.ProcessCommandDTO(dtos.CommandDTO{
-			Type:        "DISCONNECT",
+			Type:        commands.DISCONNECT,
 			CharacterID: charId,
 			Data:        nil,
 		})

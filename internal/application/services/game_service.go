@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"meatgrinder/internal/application/commands"
 	"meatgrinder/internal/application/dtos"
 	"meatgrinder/internal/domain"
 )
@@ -38,13 +39,13 @@ func (gs *GameService) ProcessCommandDTO(d dtos.CommandDTO) error {
 
 func (gs *GameService) ProcessCommand(c Command) error {
 	switch c.Type {
-	case "SPAWN":
+	case commands.SPAWN:
 		return gs.spawnHandler.Handle(c)
-	case "MOVE":
+	case commands.MOVE:
 		return gs.moveHandler.Handle(c)
-	case "ATTACK":
+	case commands.ATTACK:
 		return gs.attackHandler.Handle(c)
-	case "DISCONNECT":
+	case commands.DISCONNECT:
 		return gs.disconnectHandler.Handle(c)
 
 	default:
