@@ -11,15 +11,14 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	"meatgrinder/internal/cmd/settings"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-
 	"meatgrinder/internal/application/dtos"
 	"meatgrinder/internal/infrastructure/network"
 )
@@ -38,6 +37,13 @@ type CharacterSnapshot struct {
 	Flash  bool    `json:"flash"`
 }
 
+type Fireball struct {
+	x, y             float64
+	targetX, targetY float64
+	img              *ebiten.Image
+	timer            float64
+}
+
 type Game struct {
 	ctx                     context.Context
 	cancel                  context.CancelFunc
@@ -46,9 +52,13 @@ type Game struct {
 	w, h                    int
 	mu                      sync.Mutex
 	snap                    WorldSnapshot
+	prevSnap                WorldSnapshot
+	fireballs               []Fireball
+	pendingFireballs        map[string]int
 	bg                      *ebiten.Image
 	mIdle, mRun, mAtk, mDie *ebiten.Image
 	wIdle, wRun, wAtk, wDie *ebiten.Image
+	fireballImg             *ebiten.Image
 	spW, spH                float64
 	speed                   float64
 }
@@ -56,12 +66,14 @@ type Game struct {
 func NewGame(addr, id string) (*Game, error) {
 	ctx, c := context.WithCancel(context.Background())
 	g := &Game{
-		ctx:    ctx,
-		cancel: c,
-		id:     id,
-		w:      settings.MapHeight,
-		h:      settings.MapWidth,
-		speed:  2,
+		ctx:              ctx,
+		cancel:           c,
+		id:               id,
+		w:                800,
+		h:                600,
+		speed:            2,
+		fireballs:        []Fireball{},
+		pendingFireballs: make(map[string]int),
 	}
 	cl := network.NewClient(addr)
 	if err := cl.Connect(ctx); err != nil {
@@ -93,7 +105,64 @@ func (g *Game) listen() {
 		g.mu.Lock()
 		g.snap = ws
 		g.mu.Unlock()
+		g.processFireballs()
 	}
+}
+
+func (g *Game) processFireballs() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, c := range g.snap.Characters {
+		if strings.ToLower(c.Class) != "mage" {
+			continue
+		}
+		if strings.ToLower(c.State) != "attacking" {
+			continue
+		}
+		attackCount, exists := g.pendingFireballs[c.ID]
+		if !exists || attackCount <= 0 {
+			continue
+		}
+		for i := 0; i < attackCount; i++ {
+			target := g.findAttackedTarget(c.ID)
+			if target != nil {
+				fb := Fireball{
+					x:       c.X,
+					y:       c.Y,
+					targetX: target.X,
+					targetY: target.Y,
+					img:     g.fireballImg,
+					timer:   1.0, // Duration for the fireball to reach the target
+				}
+				g.fireballs = append(g.fireballs, fb)
+			}
+		}
+		// Reset pending attacks after processing
+		g.pendingFireballs[c.ID] = 0
+	}
+	g.prevSnap = g.snap
+}
+
+func (g *Game) findAttackedTarget(attackerID string) *CharacterSnapshot {
+	for _, c := range g.snap.Characters {
+		if c.ID == attackerID {
+			continue
+		}
+		if !c.Flash {
+			continue
+		}
+		var prev CharacterSnapshot
+		for _, pc := range g.prevSnap.Characters {
+			if pc.ID == c.ID {
+				prev = pc
+				break
+			}
+		}
+		if !prev.Flash {
+			return &c
+		}
+	}
+	return nil
 }
 
 func (g *Game) Layout(int, int) (int, int) {
@@ -101,6 +170,9 @@ func (g *Game) Layout(int, int) (int, int) {
 }
 
 func (g *Game) Update() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	dx, dy := 0.0, 0.0
 	if ebiten.IsKeyPressed(ebiten.KeyW) {
 		dy -= g.speed
@@ -124,6 +196,7 @@ func (g *Game) Update() error {
 			},
 		})
 	}
+
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		mx, my := ebiten.CursorPosition()
 		tid := g.findCharUnder(float64(mx), float64(my))
@@ -133,9 +206,40 @@ func (g *Game) Update() error {
 				CharacterID: g.id,
 				Data:        map[string]interface{}{"target_id": tid},
 			})
+			g.pendingFireballs[g.id]++
 		}
 	}
+
+	g.updateFireballs(1.0 / 60.0)
 	return nil
+}
+
+func (g *Game) updateFireballs(dt float64) {
+	newFireballs := g.fireballs[:0]
+	for i := range g.fireballs {
+		fb := &g.fireballs[i]
+		fb.timer -= dt
+		if fb.timer > 0 {
+			dx := fb.targetX - fb.x
+			dy := fb.targetY - fb.y
+			dist := math.Hypot(dx, dy)
+			if dist > 0 {
+				speed := 2000.0
+				fb.x += (dx / dist) * speed * dt
+				fb.y += (dy / dist) * speed * dt
+			}
+
+			if dist < 50 {
+				continue
+			}
+
+			if fb.x < 0 || fb.x > float64(g.w) || fb.y < 0 || fb.y > float64(g.h) {
+				continue
+			}
+			newFireballs = append(newFireballs, g.fireballs[i])
+		}
+	}
+	g.fireballs = newFireballs
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
@@ -144,39 +248,53 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		op := &ebiten.DrawImageOptions{}
 		screen.DrawImage(g.bg, op)
 	}
+
+	for _, fb := range g.fireballs {
+		op := &ebiten.DrawImageOptions{}
+		scale := 0.1
+		op.GeoM.Scale(scale, scale)
+		fbWidth, fbHeight := fb.img.Size()
+		op.GeoM.Translate(fb.x-float64(fbWidth)*scale/2, fb.y-float64(fbHeight)*scale/2)
+		screen.DrawImage(fb.img, op)
+	}
+
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	for _, c := range g.snap.Characters {
 		img := g.pickSprite(c.Class, c.State)
-		if c.State == "dying" {
+		if strings.ToLower(c.State) == "dying" {
 			img = g.dyingSprite(c.Class)
 		}
 		op := &ebiten.DrawImageOptions{}
 		if c.Flash {
 			op.ColorM.Scale(1, 0, 0, 1)
 		}
-		op.GeoM.Scale(0.5, 0.5)
-		op.GeoM.Translate(c.X, c.Y)
+		scale := 0.5
+		op.GeoM.Scale(scale, scale)
+		charWidth, charHeight := img.Size()
+		op.GeoM.Translate(c.X-float64(charWidth)*scale/2, c.Y-float64(charHeight)*scale/2)
 		screen.DrawImage(img, op)
 	}
 }
 
 func (g *Game) pickSprite(class, st string) *ebiten.Image {
-	if class == "mage" {
-		if st == "running" {
+	lowerClass := strings.ToLower(class)
+	lowerState := strings.ToLower(st)
+	if lowerClass == "mage" {
+		if lowerState == "running" {
 			return g.mRun
 		}
-		if st == "attacking" {
+		if lowerState == "attacking" {
 			return g.mAtk
 		}
 		return g.mIdle
 	}
-	if class == "warrior" {
-		if st == "running" {
+	if lowerClass == "warrior" {
+		if lowerState == "running" {
 			return g.wRun
 		}
-		if st == "attacking" {
+		if lowerState == "attacking" {
 			return g.wAtk
 		}
 		return g.wIdle
@@ -185,19 +303,18 @@ func (g *Game) pickSprite(class, st string) *ebiten.Image {
 }
 
 func (g *Game) dyingSprite(class string) *ebiten.Image {
-	if class == "mage" {
+	lowerClass := strings.ToLower(class)
+	if lowerClass == "mage" {
 		return g.mDie
 	}
 	return g.wDie
 }
 
 func (g *Game) findCharUnder(mx, my float64) string {
-	g.mu.Lock()
-	defer g.mu.Unlock()
 	for _, c := range g.snap.Characters {
 		sw := 0.5 * g.spW
 		sh := 0.5 * g.spH
-		if mx >= c.X && mx <= c.X+sw && my >= c.Y && my <= c.Y+sh {
+		if mx >= c.X-sw/2 && mx <= c.X+sw/2 && my >= c.Y-sh/2 && my <= c.Y+sh/2 {
 			return c.ID
 		}
 	}
@@ -232,9 +349,12 @@ func (g *Game) LoadAssets(dir string) {
 	w4, _ := loadImg(filepath.Join(dir, "warrior-dying.png"))
 	g.wDie = w4
 
+	fireball, _ := loadImg(filepath.Join(dir, "fireball.png"))
+	g.fireballImg = fireball
+
 	if m1 != nil {
 		ww, hh := m1.Size()
-		g.spW, g.spH = float64(ww), float64(hh)
+		g.spW, g.spH = float64(ww)*0.5, float64(hh)*0.5
 	}
 }
 
