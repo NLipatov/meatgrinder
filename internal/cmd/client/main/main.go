@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"image"
-	"image/color"
 	_ "image/png"
 	"log"
 	"math"
@@ -87,7 +86,7 @@ func NewGame(addr, id string) (*Game, error) {
 		CharacterID: id,
 		Data:        map[string]interface{}{},
 	}
-	g.client.SendCommand(spawnCmd)
+	_ = g.client.SendCommand(spawnCmd)
 
 	return g, nil
 }
@@ -133,7 +132,7 @@ func (g *Game) Update() error {
 		mx, my := ebiten.CursorPosition()
 		tid = g.findCharUnder(float64(mx), float64(my))
 		if tid != "" && tid != g.id {
-			g.client.SendCommand(dtos.CommandDTO{
+			_ = g.client.SendCommand(dtos.CommandDTO{
 				Type:        commands.ATTACK,
 				CharacterID: g.id,
 				Data:        map[string]interface{}{"target_id": tid},
@@ -176,7 +175,7 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) sendMoveCommand(dx, dy float64) {
-	g.client.SendCommand(dtos.CommandDTO{
+	_ = g.client.SendCommand(dtos.CommandDTO{
 		Type:        commands.MOVE,
 		CharacterID: g.id,
 		Data: map[string]interface{}{
@@ -212,7 +211,6 @@ func (g *Game) updateFireballs(dt float64) {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(color.RGBA{40, 40, 80, 255})
 	if g.bg != nil {
 		op := &ebiten.DrawImageOptions{}
 		screen.DrawImage(g.bg, op)
@@ -332,7 +330,9 @@ func loadImg(path string) (*ebiten.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func(f ebitenutil.ReadSeekCloser) {
+		_ = f.Close()
+	}(f)
 	img, _, err2 := image.Decode(f)
 	if err2 != nil {
 		return nil, err2
@@ -347,7 +347,7 @@ func main() {
 	flag.Parse()
 
 	if *id == "" {
-		rand.Seed(time.Now().UnixNano())
+		rand.New(rand.NewSource(time.Now().UnixNano()))
 		*id = fmt.Sprintf("player-%04d", rand.Intn(9999))
 	}
 
@@ -357,7 +357,7 @@ func main() {
 	}
 	g.LoadAssets(*assetsDir)
 	ebiten.SetWindowSize(g.w, g.h)
-	ebiten.SetWindowTitle("Meatgrinder (WASD + Attack)")
+	ebiten.SetWindowTitle("Meatgrinder")
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}

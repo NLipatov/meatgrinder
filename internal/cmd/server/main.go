@@ -22,7 +22,7 @@ func main() {
 		<-ch
 		cancel()
 	}()
-	w := domain.NewWorld(settings.MapHeight-200, settings.MapWidth-230)
+	w := domain.NewWorld(settings.MapHeight, settings.MapWidth)
 	svc := services.NewWorldSnapshotService()
 	l := persistence.NewFileLogger("game_events.log")
 	gs := services.NewGameService(w, l, svc)
