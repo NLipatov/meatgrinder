@@ -7,22 +7,24 @@ import (
 )
 
 type GameService struct {
-	world         *domain.World
-	snap          *WorldSnapshotService
-	logger        Logger
-	attackHandler Handler
-	moveHandler   Handler
-	SpawnHandler  Handler
+	world             *domain.World
+	snap              *WorldSnapshotService
+	logger            Logger
+	attackHandler     Handler
+	moveHandler       Handler
+	spawnHandler      Handler
+	disconnectHandler Handler
 }
 
 func NewGameService(w *domain.World, logger Logger, s *WorldSnapshotService) *GameService {
 	return &GameService{
-		world:         w,
-		logger:        logger,
-		snap:          s,
-		attackHandler: NewAttackHandler(w, logger),
-		moveHandler:   NewMoveHandler(w, logger),
-		SpawnHandler:  NewSpawnHandler(w, logger),
+		world:             w,
+		logger:            logger,
+		snap:              s,
+		attackHandler:     NewAttackHandler(w, logger),
+		moveHandler:       NewMoveHandler(w, logger),
+		spawnHandler:      NewSpawnHandler(w, logger),
+		disconnectHandler: NewDisconnectHandler(w, logger),
 	}
 }
 
@@ -37,11 +39,14 @@ func (gs *GameService) ProcessCommandDTO(d dtos.CommandDTO) error {
 func (gs *GameService) ProcessCommand(c Command) error {
 	switch c.Type {
 	case "SPAWN":
-		return gs.SpawnHandler.Handle(c)
+		return gs.spawnHandler.Handle(c)
 	case "MOVE":
 		return gs.moveHandler.Handle(c)
 	case "ATTACK":
 		return gs.attackHandler.Handle(c)
+	case "DISCONNECT":
+		return gs.disconnectHandler.Handle(c)
+
 	default:
 		return fmt.Errorf("unknown cmd %s", c.Type)
 	}

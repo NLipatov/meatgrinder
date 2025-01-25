@@ -52,19 +52,33 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *Server) handle(c net.Conn) {
+	d := json.NewDecoder(c)
+	charId := ""
+
 	defer func() {
 		s.mu.Lock()
 		delete(s.conns, c)
 		s.mu.Unlock()
-		c.Close()
+
+		_ = s.game.ProcessCommandDTO(dtos.CommandDTO{
+			Type:        "DISCONNECT",
+			CharacterID: charId,
+			Data:        nil,
+		})
+
+		_ = c.Close()
 	}()
-	d := json.NewDecoder(c)
+
 	for {
 		var cmd dtos.CommandDTO
 		if err := d.Decode(&cmd); err != nil {
 			return
 		}
-		s.game.ProcessCommandDTO(cmd)
+
+		if charId == "" {
+			charId = cmd.CharacterID
+		}
+		_ = s.game.ProcessCommandDTO(cmd)
 	}
 }
 
