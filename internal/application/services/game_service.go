@@ -49,7 +49,7 @@ func (gs *GameService) ProcessCommand(c Command) error {
 		return gs.disconnectHandler.Handle(c)
 
 	default:
-		return fmt.Errorf("unknown cmd %s", c.Type)
+		return fmt.Errorf("unknown cmd %v", c.Type)
 	}
 }
 

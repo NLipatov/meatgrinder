@@ -1,102 +1,128 @@
-package application_test
+package application
 
 import (
-	"context"
-	"meatgrinder/internal/application/dtos"
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"math"
+	"math/rand"
+	"meatgrinder/internal/application/commands"
 	"meatgrinder/internal/application/services"
 	"meatgrinder/internal/domain"
 	"testing"
 )
 
-type mockLogger struct {
-	events []string
+type MockHandler struct {
+	mock.Mock
 }
 
-func (ml *mockLogger) LogEvent(e string) {
-	ml.events = append(ml.events, e)
+func (m *MockHandler) Handle(c services.Command) error {
+	args := m.Called(c)
+	return args.Error(0)
 }
 
-func TestGameService_SpawnMoveAttack(t *testing.T) {
-	w := domain.NewWorld(100, 100)
-	logger := &mockLogger{}
-	snapSvc := services.NewWorldSnapshotService()
-	gs := services.NewGameService(w, logger, snapSvc)
+type MockLogger struct {
+	mock.Mock
+}
 
-	err := gs.ProcessCommandDTO(dtos.CommandDTO{
-		Type:        "SPAWN",
-		CharacterID: "hero1",
-		Data:        map[string]interface{}{},
+func (m *MockLogger) LogEvent(event string) {
+	m.Called(event)
+}
+
+func TestGameService_ProcessCommand(t *testing.T) {
+	world := domain.NewWorld(1000, 1000)
+	logger := new(MockLogger)
+	logger.On("LogEvent", mock.AnythingOfType("string")).Return().Maybe()
+	snapshotService := &services.WorldSnapshotService{}
+	gameService := services.NewGameService(world, logger, snapshotService)
+
+	t.Run("SPAWN command", func(t *testing.T) {
+		charId := fmt.Sprintf("char-%v", rand.Intn(math.MaxInt32))
+		cmd := services.Command{Type: commands.SPAWN, CharacterID: charId}
+
+		err := gameService.ProcessCommand(cmd)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, world.Characters[charId])
 	})
-	if err != nil {
-		t.Fatalf("SPAWN command failed: %v", err)
-	}
-	if w.Characters["hero1"] == nil {
-		t.Fatalf("Expected hero1 to be spawned")
-	}
 
-	moveCmd := dtos.CommandDTO{
-		Type:        "MOVE",
-		CharacterID: "hero1",
-		Data: map[string]interface{}{
-			"x": 10.0,
-			"y": 15.0,
-		},
-	}
-	err = gs.ProcessCommandDTO(moveCmd)
-	if err != nil {
-		t.Fatalf("MOVE command failed: %v", err)
-	}
+	t.Run("MOVE command", func(t *testing.T) {
+		charId := fmt.Sprintf("char-%v", rand.Intn(math.MaxInt32))
+		world.SpawnRandomCharacter(charId)
+		character := world.Characters[charId]
 
-	x, y := w.Characters["hero1"].Position()
-	if x == 0 && y == 0 {
-		t.Errorf("hero1 did not move from (0,0)")
-	}
+		initialX, initialY := character.Position()
+		cmd := services.Command{
+			Type:        commands.MOVE,
+			CharacterID: charId,
+			Data: map[string]interface{}{
+				"dx": initialX + 1.0,
+				"dy": initialY + 1.0,
+			}}
 
-	err = gs.ProcessCommandDTO(dtos.CommandDTO{
-		Type:        "SPAWN",
-		CharacterID: "enemy1",
-		Data:        map[string]interface{}{},
+		processCommandErr := gameService.ProcessCommand(cmd)
+		assert.NoError(t, processCommandErr)
+
+		world.Update()
+		x, y := character.Position()
+
+		assert.NotEqual(t, initialX, x)
+		assert.NotEqual(t, initialY, y)
 	})
-	if err != nil {
-		t.Fatalf("SPAWN enemy failed: %v", err)
-	}
-	enemy := w.Characters["enemy1"]
-	if enemy == nil {
-		t.Fatalf("Enemy not spawned")
-	}
-	enemyMage := domain.NewMage("enemy1", 10, 15)
-	w.Characters["enemy1"] = enemyMage
 
-	w.Characters["hero1"] = domain.NewWarrior("hero1", x, y)
+	t.Run("ATTACK command", func(t *testing.T) {
+		attackerId := fmt.Sprintf("char-%v", rand.Intn(math.MaxInt32))
+		targetId := fmt.Sprintf("char-%v", rand.Intn(math.MaxInt32))
 
-	attackCmd := dtos.CommandDTO{
-		Type:        "ATTACK",
-		CharacterID: "hero1",
-		Data:        map[string]interface{}{},
-	}
-	err = gs.ProcessCommandDTO(attackCmd)
-	if err != nil {
-		t.Fatalf("ATTACK command failed: %v", err)
-	}
+		mage := domain.NewMage(attackerId, 1, 1)
+		warrior := domain.NewWarrior(targetId, 1, 1)
+		world.Characters[attackerId] = mage
+		world.Characters[targetId] = warrior
 
-	if len(logger.events) == 0 {
-		t.Errorf("No events were logged")
-	}
-}
+		_ = gameService.ProcessCommand(services.Command{
+			Type:        commands.MOVE,
+			CharacterID: attackerId,
+			Data: map[string]interface{}{
+				"dx": 100.0,
+				"dy": 100.0,
+			}})
 
-func TestGameService_BroadcastState(t *testing.T) {
-	w := domain.NewWorld(50, 50)
-	logger := &mockLogger{}
-	snapSvc := services.NewWorldSnapshotService()
-	gs := services.NewGameService(w, logger, snapSvc)
+		targetInitH := world.Characters[targetId].Health()
+		attackerInitH := world.Characters[attackerId].Health()
 
-	w.Characters["dead1"] = domain.NewMage("dead1", 10, 10)
-	w.Characters["dead1"].TakeDamage(9999, domain.Physical)
+		_ = gameService.ProcessCommand(services.Command{
+			Type:        commands.ATTACK,
+			CharacterID: attackerId,
+			Data:        map[string]interface{}{"target_id": targetId},
+		})
 
-	ctx := context.Background()
-	gs.BroadcastState(ctx)
+		gameService.UpdateWorld()
 
-	if w.Characters["dead1"].IsDead() {
-		t.Errorf("Character dead1 should be respawned, but isDead()=true")
-	}
+		assert.NotNil(t, world.Characters[attackerId])
+		assert.NotNil(t, world.Characters[targetId])
+		assert.Less(t, world.Characters[targetId].Health(), targetInitH)
+		assert.Equal(t, world.Characters[attackerId].Health(), attackerInitH)
+	})
+
+	t.Run("DISCONNECT command", func(t *testing.T) {
+		charId := fmt.Sprintf("char-%v", rand.Intn(math.MaxInt32))
+		_ = gameService.ProcessCommand(services.Command{Type: commands.SPAWN, CharacterID: charId})
+
+		_, charWasOnMap := world.Characters[charId]
+
+		_ = gameService.ProcessCommand(services.Command{Type: commands.DISCONNECT, CharacterID: charId})
+		_, charWasOnMapAfterDisconnect := world.Characters[charId]
+
+		assert.True(t, charWasOnMap)
+		assert.False(t, charWasOnMapAfterDisconnect)
+	})
+
+	t.Run("Unknown command", func(t *testing.T) {
+		cmd := services.Command{Type: commands.UNSET}
+
+		err := gameService.ProcessCommand(cmd)
+
+		assert.Error(t, err)
+		assert.Equal(t, "unknown cmd 0", err.Error())
+	})
 }

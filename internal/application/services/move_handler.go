@@ -51,6 +51,10 @@ func (h *MoveHandler) Handle(c Command) error {
 
 	acx, acy := ch.Position()
 	distance := math.Hypot(acx-cx, acy-cy)
+	if distance > 50 {
+		distance = 50
+	}
+
 	if distance > 0 {
 		h.logMove(ch, distance)
 	}
